@@ -1,6 +1,11 @@
-import { ContainerRegistrationKeys, defineConfig, loadEnv, Modules } from '@medusajs/framework/utils'
+import {
+  ContainerRegistrationKeys,
+  defineConfig,
+  loadEnv,
+  Modules,
+} from "@medusajs/framework/utils";
 
-loadEnv(process.env.NODE_ENV || 'development', process.cwd())
+loadEnv(process.env.NODE_ENV || "development", process.cwd());
 
 module.exports = defineConfig({
   projectConfig: {
@@ -12,7 +17,7 @@ module.exports = defineConfig({
       authCors: process.env.AUTH_CORS!,
       jwtSecret: process.env.JWT_SECRET || "supersecret",
       cookieSecret: process.env.COOKIE_SECRET || "supersecret",
-    }
+    },
   },
   modules: [
     {
@@ -22,7 +27,7 @@ module.exports = defineConfig({
       resolve: "./src/modules/otp-notification",
     },
     {
-      resolve: "@medusajs/medusa/auth", // ✅ préfixe correct
+      resolve: "@medusajs/medusa/auth",
       dependencies: [
         Modules.CACHE,
         ContainerRegistrationKeys.LOGGER,
@@ -31,7 +36,7 @@ module.exports = defineConfig({
       options: {
         providers: [
           {
-            resolve: "@medusajs/medusa/auth-emailpass", // ✅ préfixe correct
+            resolve: "@medusajs/medusa/auth-emailpass",
             id: "emailpass",
           },
           {
@@ -42,4 +47,4 @@ module.exports = defineConfig({
       },
     },
   ],
-})
+});
