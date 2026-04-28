@@ -5,7 +5,7 @@
     "buildCommand": "npm run build"
   },
   "deploy": {
-    "startCommand": "npm run predeploy && npm run start",
+    "startCommand": "npm run build && npm run predeploy && npm run start",
     "restartPolicyType": "ON_FAILURE",
     "numReplicas": 1
   }
