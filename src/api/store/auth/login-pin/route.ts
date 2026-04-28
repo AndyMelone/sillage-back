@@ -1,42 +1,60 @@
-import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
-import { Modules } from "@medusajs/framework/utils";
+import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
+import { Modules } from "@medusajs/framework/utils"
+import {
+  generateCustomerToken,
+  getOrCreateLinkedCustomer,
+} from "../_helpers"
+
+type LoginPinBody = {
+  phone?: string
+  pin?: string
+}
 
 /**
  * POST /store/auth/login-pin
  *
- * Authentification simple par PIN pour les comptes existants.
+ * Login direct par PIN (sans 2FA OTP).
+ * Utiliser ce endpoint quand le niveau de sécurité 2FA n'est pas requis.
+ * Pour un login avec 2FA : POST /otp/send puis POST /otp/verify.
+ *
+ * Body : { phone, pin }
+ * Response : { token, customer: { id } }
  */
-export const POST = async (
-  req: MedusaRequest<{ phone: string; pin: string }>,
-  res: MedusaResponse,
-) => {
-  const { phone, pin } = req.body;
+export const POST = async (req: MedusaRequest<LoginPinBody>, res: MedusaResponse) => {
+  const { phone, pin } = req.body
 
   if (!phone || !pin) {
-    return res.status(400).json({ error: "Phone and PIN are required." });
+    return res.status(400).json({ error: "Le numéro de téléphone et le code de sécurité sont requis." })
   }
 
-  const authModule = req.scope.resolve(Modules.AUTH);
+  const normalizedPhone = phone.replace(/\s+/g, "")
+  const authModule = req.scope.resolve(Modules.AUTH)
 
   try {
     const authResponse = await authModule.authenticate("phone-otp", {
-      body: { phone, pin },
-    });
+      body: { phone: normalizedPhone, pin },
+    })
 
     if (!authResponse.success) {
-      return res
-        .status(401)
-        .json({ error: authResponse.error || "Invalid credentials." });
+      return res.status(401).json({ error: authResponse.error || "Identifiants incorrects." })
     }
 
-    // Ici on devrait normalement retourner un token JWT Medusa
-    // Pour simplifier l'intégration actuelle :
+    const authIdentity = authResponse.authIdentity!
+
+    const customerId = await getOrCreateLinkedCustomer(
+      req.scope,
+      authIdentity,
+      normalizedPhone
+    )
+
+    const token = generateCustomerToken(authIdentity.id, customerId)
+
     return res.json({
-      message: "Login successful.",
-      token: "dummy_token_for_now", // À remplacer par un vrai token si configuré
-      identity: authResponse.authIdentity,
-    });
+      token,
+      customer: { id: customerId },
+    })
   } catch (error: unknown) {
-    return res.status(500).json({ error: "Authentication failed." });
+    console.error("[Login PIN Error]", error)
+    return res.status(500).json({ error: "Authentification impossible." })
   }
-};
+}

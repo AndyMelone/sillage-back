@@ -52,16 +52,17 @@ export class PhoneOtpAuthProvider extends AbstractAuthModuleProvider {
         const hashedPin = await bcrypt.hash(pin, this.SALT_ROUNDS)
         const existingMeta = (providerIdentity?.provider_metadata as Record<string, unknown>) ?? {}
 
-        await authIdentityProviderService.update(authIdentity.id, {
+        // Le premier argument de update() est l'entity_id (phone), pas authIdentity.id.
+        // C'est le pattern Medusa v2 : voir auth-emailpass → update(entity_id, data).
+        await authIdentityProviderService.update(phone, {
           provider_metadata: {
             ...existingMeta,
             hashed_pin: hashedPin,
           },
         })
 
-        // On rafraîchit l'identité pour retourner la version à jour
         const updatedIdentity = await authIdentityProviderService.retrieve({
-            entity_id: phone,
+          entity_id: phone,
         })
 
         return { success: true, authIdentity: updatedIdentity }
@@ -139,7 +140,7 @@ export class PhoneOtpAuthProvider extends AbstractAuthModuleProvider {
     const existingMeta =
       (authIdentity.provider_identities?.[0]?.provider_metadata as Record<string, unknown>) ?? {}
 
-    await authIdentityProviderService.update(authIdentity.id, {
+    await authIdentityProviderService.update(phone, {
       provider_metadata: {
         ...existingMeta,
         hashed_pin: hashedPin,

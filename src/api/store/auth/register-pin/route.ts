@@ -1,62 +1,92 @@
-import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
-import { Modules } from "@medusajs/framework/utils";
-import { OTP_AUTH_MODULE } from "../../../../modules/otp-auth";
-import { OtpAuthService } from "../../../../modules/otp-auth/service";
+import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
+import { Modules } from "@medusajs/framework/utils"
+import { IAuthModuleService } from "@medusajs/framework/types"
+import { OTP_AUTH_MODULE } from "../../../../modules/otp-auth"
+import { OtpAuthService } from "../../../../modules/otp-auth/service"
+import { generateCustomerToken, createLinkedCustomer } from "../_helpers"
+
+type RegisterPinBody = {
+  phone?: string
+  otp?: string
+  pin?: string
+}
 
 /**
  * POST /store/auth/register-pin
- * 
- * Création de compte : Valide l'OTP puis crée l'identité avec le PIN.
+ *
+ * Création de compte (nouveau client).
+ * Étapes :
+ *  1. Valide le code OTP (envoyé via /otp/send-new-account)
+ *  2. Crée l'auth identity avec le PIN hashé (provider phone-otp)
+ *  3. Crée le customer Medusa et le lie à l'auth identity
+ *  4. Retourne un JWT valide
+ *
+ * Body : { phone, otp, pin }
+ * Response : { token, customer: { id, phone } }
  */
-export const POST = async (
-  req: MedusaRequest<{ phone: string; otp: string; pin: string }>,
-  res: MedusaResponse
-) => {
-  const { phone, otp, pin } = req.body;
+export const POST = async (req: MedusaRequest<RegisterPinBody>, res: MedusaResponse) => {
+  const { phone, otp, pin } = req.body
 
   if (!phone || !otp || !pin) {
-    return res.status(400).json({ error: "Phone, OTP and PIN are required." });
+    return res.status(400).json({ error: "Les champs phone, otp et pin sont requis." })
   }
 
-  const otpAuthService: OtpAuthService = req.scope.resolve(OTP_AUTH_MODULE);
-  const authModule = req.scope.resolve(Modules.AUTH);
+  if (pin.length < 4 || pin.length > 8) {
+    return res.status(400).json({
+      error: "Le code de sécurité doit contenir entre 4 et 8 chiffres.",
+    })
+  }
 
+  const normalizedPhone = phone.replace(/\s+/g, "")
+  if (!/^\+?[0-9]{8,15}$/.test(normalizedPhone)) {
+    return res.status(400).json({ error: "Format de numéro de téléphone invalide." })
+  }
+
+  const otpAuthService: OtpAuthService = req.scope.resolve(OTP_AUTH_MODULE)
+
+  // Étape 1 : Vérifier l'OTP
   try {
-    // 1. Vérifier l'OTP
-    await otpAuthService.verifyOtp(phone, otp);
-
-    // 2. Créer l'identité via le provider
-    const authResponse = await authModule.authenticate("phone-otp", {
-      body: { phone, pin },
-      // On passe une info pour dire qu'on veut register
-    } as any);
-
-    // Note: Le provider PhoneOtpAuthProvider a une méthode register, 
-    // mais authenticate avec body peut aussi être utilisé si on le modifie légèrement.
-    // Pour cet exercice, on va assumer que le provider est prêt ou on utilise register directement.
-    
-    // Si authenticate ne gère pas la création, on utilise register
-    let finalResponse = authResponse;
-    if (!authResponse.success && authResponse.error?.includes("Aucun compte")) {
-       finalResponse = await (authModule as any).register("phone-otp", {
-         body: { phone, pin }
-       });
-    }
-
-    if (!finalResponse.success) {
-      return res.status(400).json({ error: finalResponse.error || "Registration failed." });
-    }
-
-    return res.json({
-      message: "Account created successfully.",
-      token: "dummy_registration_token",
-      identity: finalResponse.authIdentity
-    });
+    await otpAuthService.verifyOtp(normalizedPhone, otp)
   } catch (error: unknown) {
-    const errMsg = error instanceof Error ? error.message : "Error";
-    if (errMsg.includes("OTP_")) {
-        return res.status(401).json({ error: errMsg.split(":")[1] || errMsg });
+    const errMsg = error instanceof Error ? error.message : "OTP_INVALID:Code invalide."
+    const [code, message] = errMsg.split(":")
+    const statusMap: Record<string, number> = {
+      OTP_NOT_FOUND: 404,
+      OTP_EXPIRED: 401,
+      OTP_INVALID: 401,
+      OTP_MAX_ATTEMPTS: 429,
     }
-    return res.status(500).json({ error: "Registration failed." });
+    return res.status(statusMap[code] ?? 400).json({ error: message ?? errMsg })
   }
-};
+
+  const authModule: IAuthModuleService = req.scope.resolve(Modules.AUTH)
+
+  // Étape 2 : Créer l'auth identity avec le PIN
+  const authResponse = await authModule.register("phone-otp", {
+    body: { phone: normalizedPhone, pin },
+  })
+
+  if (!authResponse.success) {
+    const isAlreadyExists = authResponse.error?.toLowerCase().includes("existe déjà")
+    return res.status(isAlreadyExists ? 409 : 400).json({
+      error: authResponse.error || "Impossible de créer le compte.",
+    })
+  }
+
+  const authIdentity = authResponse.authIdentity!
+
+  // Étape 3 : Créer le customer Medusa et le lier à l'auth identity
+  // (createCustomerAccountWorkflow exige un email — on crée directement via les modules)
+  const customerId = await createLinkedCustomer(req.scope, authIdentity.id, normalizedPhone)
+
+  // Étape 4 : Générer le JWT
+  const token = generateCustomerToken(authIdentity.id, customerId)
+
+  return res.status(201).json({
+    token,
+    customer: {
+      id: customerId,
+      phone: normalizedPhone,
+    },
+  })
+}

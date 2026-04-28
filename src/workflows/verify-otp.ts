@@ -6,7 +6,7 @@ import {
 } from "@medusajs/framework/workflows-sdk"
 import { OTP_AUTH_MODULE } from "../modules/otp-auth"
 import { OtpAuthService } from "../modules/otp-auth/service"
-import { Modules } from "@medusajs/framework/utils"
+import { Modules, ContainerRegistrationKeys } from "@medusajs/framework/utils"
 import { IAuthModuleService } from "@medusajs/framework/types"
 
 type VerifyOtpInput = {
@@ -18,37 +18,40 @@ const verifyOtpStep = createStep(
   "verify-otp-step",
   async (input: VerifyOtpInput, { container }) => {
     const otpAuthService: OtpAuthService = container.resolve(OTP_AUTH_MODULE)
-
-    // On utilise any car les types générés par MedusaService posent souci à la compilation ici
-    const isValid = await (otpAuthService as any).verifyOtp(input.phone, input.code)
-
-    if (!isValid) {
-       throw new Error("OTP_INVALID:Code incorrect ou expiré.")
-    }
-
+    await otpAuthService.verifyOtp(input.phone, input.code)
     return new StepResponse({ success: true })
   }
 )
 
+/**
+ * Cherche l'auth identity via le query service (filtre sur provider_identities confirmé
+ * fonctionnel), puis récupère l'objet complet (avec app_metadata) via l'auth module.
+ */
 const getAuthIdentityStep = createStep(
-    "get-auth-identity-step",
-    async (input: { phone: string }, { container }) => {
-        const authModuleService: IAuthModuleService = container.resolve(Modules.AUTH)
-        
-        const [identity] = await authModuleService.listAuthIdentities({
-            provider_identities: {
-                entity_id: input.phone
-            }
-        }, {
-            relations: ["provider_identities"]
-        })
+  "get-auth-identity-step",
+  async (input: { phone: string }, { container }) => {
+    const query = container.resolve(ContainerRegistrationKeys.QUERY)
 
-        if (!identity) {
-            throw new Error("IDENTITY_NOT_FOUND:Compte non trouvé après vérification.")
-        }
+    const { data: results } = await query.graph({
+      entity: "auth_identity",
+      fields: ["id"],
+      filters: {
+        provider_identities: {
+          entity_id: input.phone,
+          provider: "phone-otp",
+        },
+      },
+    })
 
-        return new StepResponse(identity)
+    if (!results.length) {
+      throw new Error("IDENTITY_NOT_FOUND:Compte non trouvé.")
     }
+
+    const authModuleService: IAuthModuleService = container.resolve(Modules.AUTH)
+    const identity = await authModuleService.retrieveAuthIdentity(results[0].id)
+
+    return new StepResponse(identity)
+  }
 )
 
 export const verifyOtpWorkflow = createWorkflow(

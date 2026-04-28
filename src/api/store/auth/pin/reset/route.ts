@@ -2,6 +2,10 @@ import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { Modules } from "@medusajs/framework/utils"
 import { OTP_AUTH_MODULE } from "../../../../../modules/otp-auth"
 import { OtpAuthService } from "../../../../../modules/otp-auth/service"
+import {
+  generateCustomerToken,
+  getOrCreateLinkedCustomer,
+} from "../../_helpers"
 
 type ResetPinBody = {
   phone?: string
@@ -12,18 +16,16 @@ type ResetPinBody = {
 /**
  * POST /store/auth/pin/reset
  *
- * PIN oublié : Valide l'OTP puis met à jour le PIN du compte.
- * Ne requiert PAS l'ancien PIN (flux "mot de passe oublié").
+ * PIN oublié : valide l'OTP puis réinitialise le PIN.
+ * L'ancien PIN n'est pas requis (flux "mot de passe oublié").
+ * Reconnecte automatiquement le client après la réinitialisation.
  *
  * Body : { phone, otp, new_pin }
+ * Response : { token, message }
  */
-export const POST = async (
-  req: MedusaRequest<ResetPinBody>,
-  res: MedusaResponse
-) => {
+export const POST = async (req: MedusaRequest<ResetPinBody>, res: MedusaResponse) => {
   const { phone, otp, new_pin } = req.body
 
-  // ─── Validation ───────────────────────────────────────
   if (!phone || !otp || !new_pin) {
     return res.status(400).json({
       error: "Les champs phone, otp et new_pin sont requis.",
@@ -38,7 +40,7 @@ export const POST = async (
 
   const normalizedPhone = phone.replace(/\s+/g, "")
 
-  // ─── Étape 1 : Valider l'OTP ───────────────────────────
+  // Étape 1 : Valider l'OTP
   const otpAuthService: OtpAuthService = req.scope.resolve(OTP_AUTH_MODULE)
   try {
     await otpAuthService.verifyOtp(normalizedPhone, otp)
@@ -54,15 +56,12 @@ export const POST = async (
     return res.status(statusMap[code] ?? 400).json({ error: message ?? errMsg })
   }
 
-  // ─── Étape 2 : Appeler register (réinitialise le PIN via le provider) ──
-  // On utilise le provider directement avec l'action "reset"
+  // Étape 2 : Mettre à jour le PIN via le provider (action "reset")
   const authModule = req.scope.resolve(Modules.AUTH)
 
   try {
-    // Pour réinitialiser, on appelle register qui va mettre à jour le hash du PIN
-    // Le provider phone-otp gère le cas où l'identité existe déjà
     const authResponse = await authModule.authenticate("phone-otp", {
-      body: { phone: normalizedPhone, pin: new_pin, otp, action: "reset" },
+      body: { phone: normalizedPhone, pin: new_pin, action: "reset" },
     })
 
     if (!authResponse.success) {
@@ -71,13 +70,24 @@ export const POST = async (
       })
     }
 
-    return res.json({ 
+    const authIdentity = authResponse.authIdentity!
+
+    // Étape 3 : Générer un JWT (reconnexion automatique après reset)
+    const customerId = await getOrCreateLinkedCustomer(
+      req.scope,
+      authIdentity,
+      normalizedPhone
+    )
+
+    const token = generateCustomerToken(authIdentity.id, customerId)
+
+    return res.json({
       message: "Code de sécurité réinitialisé avec succès.",
-      token: "dummy_reset_token"
+      token,
+      customer: { id: customerId },
     })
   } catch (error: unknown) {
-    const errMsg = error instanceof Error ? error.message : "Erreur inconnue."
-    console.error("[PIN Reset Error]", errMsg)
+    console.error("[PIN Reset Error]", error)
     return res.status(500).json({ error: "Impossible de réinitialiser le code de sécurité." })
   }
 }
