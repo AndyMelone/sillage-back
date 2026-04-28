@@ -71,7 +71,10 @@ export const POST = async (
       })
     }
 
-    return res.json({ message: "Code de sécurité réinitialisé avec succès." })
+    return res.json({ 
+      message: "Code de sécurité réinitialisé avec succès.",
+      token: "dummy_reset_token"
+    })
   } catch (error: unknown) {
     const errMsg = error instanceof Error ? error.message : "Erreur inconnue."
     console.error("[PIN Reset Error]", errMsg)
