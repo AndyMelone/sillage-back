@@ -24,7 +24,7 @@ jobs:
         run: yarn install --immutable
 
       - name: Type check
-        run: yarn tsc --noEmit
+        run: yarn tsc --noEmit -p tsconfig.check.json
 
   migrate:
     name: Run Migrations
