@@ -24,3 +24,10 @@ build
 !.yarn/versions
 
 .medusa
+
+*.env.local
+*.env.prod
+*.env.test
+
+
+.env.prod

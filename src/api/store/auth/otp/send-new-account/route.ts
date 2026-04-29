@@ -1,10 +1,10 @@
-import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
-import { sendOtpNoPinWorkflow } from "../../../../../workflows/send-otp-no-pin"
+import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
+import { generateAndSendOtp } from "../../_helpers";
 
 type SendNewAccountOtpBody = {
-  phone?: string
-  channel?: "sms" | "whatsapp"
-}
+  phone?: string;
+  channel?: "sms" | "whatsapp";
+};
 
 /**
  * POST /store/auth/otp/send-new-account
@@ -17,36 +17,42 @@ type SendNewAccountOtpBody = {
  */
 export const POST = async (
   req: MedusaRequest<SendNewAccountOtpBody>,
-  res: MedusaResponse
+  res: MedusaResponse,
 ) => {
-  const { phone, channel = "whatsapp" } = req.body
+  const { phone, channel = "whatsapp" } = req.body;
 
   if (!phone || typeof phone !== "string") {
-    return res.status(400).json({ error: "Le numéro de téléphone est requis." })
+    return res
+      .status(400)
+      .json({ error: "Le numéro de téléphone est requis." });
   }
 
   if (!["sms", "whatsapp"].includes(channel)) {
-    return res.status(400).json({ error: 'Le canal doit être "sms" ou "whatsapp".' })
+    return res
+      .status(400)
+      .json({ error: 'Le canal doit être "sms" ou "whatsapp".' });
   }
 
-  const normalizedPhone = phone.replace(/\s+/g, "")
+  const normalizedPhone = phone.replace(/\s+/g, "");
   if (!/^\+?[0-9]{8,15}$/.test(normalizedPhone)) {
-    return res.status(400).json({ error: "Format de numéro de téléphone invalide." })
+    return res
+      .status(400)
+      .json({ error: "Format de numéro de téléphone invalide." });
   }
 
   try {
-    await sendOtpNoPinWorkflow(req.scope).run({
-      input: { phone: normalizedPhone, channel },
-    })
-    return res.json({ message: "Code de vérification envoyé avec succès." })
+    await generateAndSendOtp(req.scope, normalizedPhone, channel);
+    return res.json({ message: "Code de vérification envoyé avec succès." });
   } catch (error: unknown) {
-    const errMsg = error instanceof Error ? error.message : "Erreur inconnue"
+    const errMsg = error instanceof Error ? error.message : "Erreur inconnue";
 
     if (errMsg.startsWith("RATE_LIMIT:")) {
-      return res.status(429).json({ error: errMsg.replace("RATE_LIMIT:", "") })
+      return res.status(429).json({ error: errMsg.replace("RATE_LIMIT:", "") });
     }
 
-    console.error("[OTP Send New Account Error]", error)
-    return res.status(500).json({ error: "Impossible d'envoyer le code. Veuillez réessayer." })
+    console.error("[OTP Send New Account Error]", error);
+    return res
+      .status(500)
+      .json({ error: "Impossible d'envoyer le code. Veuillez réessayer." });
   }
-}
+};
