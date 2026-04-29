@@ -1,6 +1,7 @@
 import { MedusaService } from "@medusajs/framework/utils"
 import { OtpCode } from "./models/otp_code"
 import * as bcrypt from "bcrypt"
+import { getDevOtp } from "../../lib/dev-otp"
 
 type CreateOtpResult = {
   code: string // Le code en clair (pour l'envoyer par SMS/WhatsApp)
@@ -52,9 +53,7 @@ export class OtpAuthService extends MedusaService({
     }
 
     // Générer le code en clair (6 chiffres)
-    const plainCode = Math.floor(
-      100000 + Math.random() * 900000
-    ).toString()
+    const plainCode = getDevOtp() ?? Math.floor(100000 + Math.random() * 900000).toString()
 
     // Hacher le code avant de le stocker
     const hashedCode = await bcrypt.hash(plainCode, this.SALT_ROUNDS)
