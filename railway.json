@@ -5,7 +5,7 @@
     "buildCommand": "corepack enable && yarn build && cd .medusa/server && yarn install --immutable"
   },
   "deploy": {
-    "startCommand": "cd .medusa/server && yarn predeploy && yarn start",
+    "startCommand": "cd .medusa/server && yarn start",
     "restartPolicyType": "ON_FAILURE",
     "numReplicas": 1
   }
