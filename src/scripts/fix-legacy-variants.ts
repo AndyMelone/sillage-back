@@ -30,9 +30,11 @@ export default async function fixLegacyVariants({ container }: ExecArgs) {
   });
 
   for (const product of products) {
-    const firstVariant = product.variants?.[0];
+    const firstVariant = product.variants?.[0] as
+      | { prices?: { amount: number; currency_code: string }[] }
+      | undefined;
     const existingPrice = firstVariant?.prices?.find(
-      (p: { currency_code: string }) => p.currency_code === "xof",
+      (p) => p.currency_code === "xof",
     );
     const amount = existingPrice?.amount ?? 85000;
 
