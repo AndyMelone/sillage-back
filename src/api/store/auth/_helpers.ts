@@ -143,20 +143,15 @@ export async function verifyOtpCode(
   await otpAuthService.verifyOtp(phone, code);
 }
 
-/**
- * Vérifie le PIN d'un compte existant via le provider d'authentification custom.
- */
-export async function authenticatePhonePin(
+export async function authenticatePhone(
   scope: MedusaContainer,
   phone: string,
-  pin: string,
 ) {
   const authModule: IAuthModuleService = scope.resolve(Modules.AUTH);
 
   return authModule.authenticate("phone-otp", {
     body: {
       phone,
-      pin,
     },
   });
 }

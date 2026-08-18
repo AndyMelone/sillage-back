@@ -262,9 +262,13 @@ export default async function seedDemoData({ container }: ExecArgs) {
 
   const existingShippingOptions =
     await fulfillmentModuleService.listShippingOptions({
-      name: ["Livraison Standard", "Livraison Express"],
+      name: [
+        "Livraison Standard",
+        "Livraison Express",
+        "Je récupère en boutique",
+      ],
     });
-  if (existingShippingOptions.length < 2) {
+  if (existingShippingOptions.length < 3) {
     await createShippingOptionsWorkflow(container).run({
       input: [
         {
@@ -315,6 +319,31 @@ export default async function seedDemoData({ container }: ExecArgs) {
               value: "true",
               operator: "eq",
             },
+            {
+              attribute: "is_return",
+              value: "false",
+              operator: "eq",
+            },
+          ],
+        },
+        {
+          name: "Je récupère en boutique",
+          price_type: "flat",
+          provider_id: "manual_manual",
+          service_zone_id: fulfillmentSet.service_zones[0].id,
+          shipping_profile_id: shippingProfile.id,
+          type: {
+            label: "Retrait en boutique",
+            description: "À récupérer directement au showroom Sillage.",
+            code: "pickup",
+          },
+          prices: [
+            {
+              currency_code: "xof",
+              amount: 0,
+            },
+          ],
+          rules: [
             {
               attribute: "is_return",
               value: "false",
@@ -387,20 +416,24 @@ export default async function seedDemoData({ container }: ExecArgs) {
         input: {
           product_categories: [
             {
-              name: "Shirts",
+              name: "Boisé",
               is_active: true,
+              metadata: { image: "/images/collection-woody.jpg" },
             },
             {
-              name: "Sweatshirts",
+              name: "Fruité",
               is_active: true,
+              metadata: { image: "/images/featured-perfume.jpg" },
             },
             {
-              name: "Pants",
+              name: "Florale",
               is_active: true,
+              metadata: { image: "/images/collection-floral.jpg" },
             },
             {
-              name: "Merch",
+              name: "Orientale",
               is_active: true,
+              metadata: { image: "/images/collection-oriental.jpg" },
             },
           ],
         },
@@ -422,9 +455,69 @@ export default async function seedDemoData({ container }: ExecArgs) {
       await createCollectionsWorkflow(container).run({
         input: {
           collections: [
-            { title: "Boisé", handle: "boise" },
-            { title: "Fruité", handle: "fruite" },
-            { title: "Florale", handle: "florale" },
+            {
+              title: "Boisé",
+              handle: "boise",
+              metadata: {
+                image: "/images/collection-woody.jpg",
+                description:
+                  "La chaleur envoûtante du bois de santal, du cèdre et du vétiver.",
+              },
+            },
+            {
+              title: "Fruité",
+              handle: "fruite",
+              metadata: {
+                image: "/images/featured-perfume.jpg",
+                description:
+                  "L'énergie pétillante des fruits juteux et des agrumes sucrés.",
+              },
+            },
+            {
+              title: "Florale",
+              handle: "florale",
+              metadata: {
+                image: "/images/collection-floral.jpg",
+                description:
+                  "La délicatesse d'un bouquet de fleurs blanches et de pivoine.",
+              },
+            },
+            {
+              title: "Orientale",
+              handle: "orientale",
+              metadata: {
+                image: "/images/collection-oriental.jpg",
+                description:
+                  "Voyage olfactif au cœur des épices, de l'ambre et du musc.",
+              },
+            },
+            {
+              title: "Fraîche",
+              handle: "fraiche",
+              metadata: {
+                image: "/images/collection-fresh.jpg",
+                description:
+                  "La pureté cristalline des eaux, agrumes et herbes aromatiques.",
+              },
+            },
+            {
+              title: "Gourmande",
+              handle: "gourmande",
+              metadata: {
+                image: "/placeholders/perfume-vue-2.png",
+                description:
+                  "L'ivresse sucrée de la vanille, du caramel et du chocolat.",
+              },
+            },
+            {
+              title: "Cuirée",
+              handle: "cuiree",
+              metadata: {
+                image: "/placeholders/perfume-luxury-gold.png",
+                description:
+                  "La noblesse du cuir tanné mêlée au tabac et au vétiver.",
+              },
+            },
           ],
         },
       });
@@ -445,7 +538,7 @@ export default async function seedDemoData({ container }: ExecArgs) {
           {
             title: "L'Aube Dorée",
             category_ids: [
-              categoryResult.find((cat) => cat.name === "Shirts")!.id,
+              categoryResult.find((cat) => cat.name === "Boisé")!.id,
             ],
             collection_id: collectionsResult.find(
               (col) => col.title === "Boisé",
@@ -604,7 +697,7 @@ export default async function seedDemoData({ container }: ExecArgs) {
           {
             title: "Nuit d'Orient",
             category_ids: [
-              categoryResult.find((cat) => cat.name === "Sweatshirts")!.id,
+              categoryResult.find((cat) => cat.name === "Fruité")!.id,
             ],
             collection_id: collectionsResult.find(
               (col) => col.title === "Fruité",
@@ -699,7 +792,7 @@ export default async function seedDemoData({ container }: ExecArgs) {
           {
             title: "Rosée Matinale",
             category_ids: [
-              categoryResult.find((cat) => cat.name === "Pants")!.id,
+              categoryResult.find((cat) => cat.name === "Florale")!.id,
             ],
             collection_id: collectionsResult.find(
               (col) => col.title === "Florale",
@@ -794,7 +887,7 @@ export default async function seedDemoData({ container }: ExecArgs) {
           {
             title: "Sillage Boisé",
             category_ids: [
-              categoryResult.find((cat) => cat.name === "Merch")!.id,
+              categoryResult.find((cat) => cat.name === "Boisé")!.id,
             ],
             collection_id: collectionsResult.find(
               (col) => col.title === "Boisé",

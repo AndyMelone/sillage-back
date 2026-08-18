@@ -5,10 +5,9 @@ import { OTP_AUTH_MODULE } from "../../../../modules/otp-auth"
 import { OtpAuthService } from "../../../../modules/otp-auth/service"
 import { generateCustomerToken, createLinkedCustomer } from "../_helpers"
 
-type RegisterPinBody = {
+type RegisterBody = {
   phone?: string
   otp?: string
-  pin?: string
 }
 
 /**
@@ -17,24 +16,18 @@ type RegisterPinBody = {
  * Création de compte (nouveau client).
  * Étapes :
  *  1. Valide le code OTP (envoyé via /otp/send-new-account)
- *  2. Crée l'auth identity avec le PIN hashé (provider phone-otp)
+ *  2. Crée l'auth identity (provider phone-otp)
  *  3. Crée le customer Medusa et le lie à l'auth identity
  *  4. Retourne un JWT valide
  *
- * Body : { phone, otp, pin }
+ * Body : { phone, otp }
  * Response : { token, customer: { id, phone } }
  */
-export const POST = async (req: MedusaRequest<RegisterPinBody>, res: MedusaResponse) => {
-  const { phone, otp, pin } = req.body
+export const POST = async (req: MedusaRequest<RegisterBody>, res: MedusaResponse) => {
+  const { phone, otp } = req.body
 
-  if (!phone || !otp || !pin) {
-    return res.status(400).json({ error: "Les champs phone, otp et pin sont requis." })
-  }
-
-  if (pin.length < 4 || pin.length > 8) {
-    return res.status(400).json({
-      error: "Le code de sécurité doit contenir entre 4 et 8 chiffres.",
-    })
+  if (!phone || !otp) {
+    return res.status(400).json({ error: "Les champs phone et otp sont requis." })
   }
 
   const normalizedPhone = phone.replace(/\s+/g, "")
@@ -61,9 +54,9 @@ export const POST = async (req: MedusaRequest<RegisterPinBody>, res: MedusaRespo
 
   const authModule: IAuthModuleService = req.scope.resolve(Modules.AUTH)
 
-  // Étape 2 : Créer l'auth identity avec le PIN
+  // Étape 2 : Créer l'auth identity
   const authResponse = await authModule.register("phone-otp", {
-    body: { phone: normalizedPhone, pin },
+    body: { phone: normalizedPhone },
   })
 
   if (!authResponse.success) {

@@ -1,38 +1,28 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http";
-import { authenticatePhonePin, generateAndSendOtp } from "../../_helpers";
+import { authenticatePhone, generateAndSendOtp } from "../../_helpers";
 
 type SendOtpBody = {
   phone?: string;
-  pin?: string;
   channel?: "sms" | "whatsapp";
 };
 
 /**
  * POST /store/auth/otp/send
  *
- * Login existant — étape 2 (après check-phone) :
- *  1. Vérifie le PIN du client
- *  2. Génère et envoie un code OTP (2FA)
- *
- * Body : { phone, pin, channel? }  — channel par défaut : "whatsapp"
+ * Génère et envoie un code OTP au numéro fourni.
+ * Body : { phone, channel? }  — channel par défaut : "whatsapp"
  * Response : { message }
  */
 export const POST = async (
   req: MedusaRequest<SendOtpBody>,
   res: MedusaResponse,
 ) => {
-  const { phone, pin, channel = "whatsapp" } = req.body;
+  const { phone, channel = "whatsapp" } = req.body;
 
   if (!phone || typeof phone !== "string") {
     return res
       .status(400)
       .json({ error: "Le numéro de téléphone est requis." });
-  }
-
-  if (!pin || typeof pin !== "string") {
-    return res
-      .status(400)
-      .json({ error: "Le code de sécurité (PIN) est requis." });
   }
 
   if (!["sms", "whatsapp"].includes(channel)) {
@@ -49,15 +39,11 @@ export const POST = async (
   }
 
   try {
-    const authResponse = await authenticatePhonePin(
-      req.scope,
-      normalizedPhone,
-      pin,
-    );
+    const authResponse = await authenticatePhone(req.scope, normalizedPhone);
 
     if (!authResponse.success) {
       return res.status(401).json({
-        error: authResponse.error || "Code PIN incorrect.",
+        error: authResponse.error || "Aucun compte trouvé pour ce numéro.",
       });
     }
 
@@ -66,11 +52,6 @@ export const POST = async (
   } catch (error: unknown) {
     const errMsg = error instanceof Error ? error.message : "Erreur inconnue";
 
-    if (errMsg.startsWith("AUTHENTICATION_FAILED:")) {
-      return res
-        .status(401)
-        .json({ error: errMsg.replace("AUTHENTICATION_FAILED:", "") });
-    }
     if (errMsg.startsWith("RATE_LIMIT:")) {
       return res.status(429).json({ error: errMsg.replace("RATE_LIMIT:", "") });
     }
